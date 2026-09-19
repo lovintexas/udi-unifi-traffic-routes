@@ -112,6 +112,57 @@ class UniFiClient:
         data = response.json()
         return data.get("data", [])
 
+    def get_firewall_policies(self):
+        url = (
+            f"https://{self.host}"
+            "/proxy/network/v2/api/site/default/firewall-policies"
+        )
+
+        response = self.session.get(url, timeout=15)
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.get(url, timeout=15)
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if isinstance(data, dict):
+            return data.get("data", [])
+
+        return data
+
+    def set_firewall_policy_enabled(self, policy_id, enabled):
+        url = (
+            f"https://{self.host}"
+            "/proxy/network/v2/api/site/default/firewall-policies/batch"
+        )
+
+        payload = [
+            {
+                "_id": policy_id,
+                "enabled": bool(enabled)
+            }
+        ]
+
+        response = self.session.put(
+            url,
+            json=payload,
+            timeout=15
+        )
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.put(
+                url,
+                json=payload,
+                timeout=15
+            )
+
+        response.raise_for_status()
+        return response.json()
+
     def set_port_poe_mode(self, switch_id, port_idx, poe_mode):
         devices = self.get_devices()
 
@@ -337,6 +388,104 @@ class UniFiClientNode(udi_interface.Node):
         self.setDriver("ST", 1 if online else 0)
 
 
+class UniFiFirewallPolicyNode(udi_interface.Node):
+
+    id = "unififirewall"
+
+    drivers = [
+        {"driver": "ST", "value": 0, "uom": 2}
+    ]
+
+    def __init__(
+        self,
+        polyglot,
+        primary,
+        address,
+        name,
+        client,
+        policy_id
+    ):
+        super().__init__(polyglot, primary, address, name)
+
+        self.client = client
+        self.policy_id = policy_id
+
+    def update_status(self, enabled):
+        self.setDriver("ST", 1 if enabled else 0)
+
+    def _verified_refresh(self):
+        try:
+            time.sleep(3)
+
+            policies = self.client.get_firewall_policies()
+
+            for policy in policies:
+                if policy.get("_id") == self.policy_id:
+                    self.update_status(
+                        policy.get("enabled", False)
+                    )
+                    return
+
+            LOGGER.warning(
+                "Firewall policy not found during refresh: %s",
+                self.name
+            )
+
+        except Exception:
+            LOGGER.exception(
+                "Firewall policy refresh failed: %s",
+                self.name
+            )
+
+    def _schedule_refresh(self):
+        threading.Thread(
+            target=self._verified_refresh,
+            daemon=True
+        ).start()
+
+    def cmd_on(self, command):
+        LOGGER.info(
+            "Enabling UniFi firewall policy: %s",
+            self.name
+        )
+
+        self.client.set_firewall_policy_enabled(
+            self.policy_id,
+            True
+        )
+
+        self._schedule_refresh()
+
+    def cmd_off(self, command):
+        LOGGER.info(
+            "Disabling UniFi firewall policy: %s",
+            self.name
+        )
+
+        self.client.set_firewall_policy_enabled(
+            self.policy_id,
+            False
+        )
+
+        self._schedule_refresh()
+
+    def cmd_query(self, command):
+        policies = self.client.get_firewall_policies()
+
+        for policy in policies:
+            if policy.get("_id") == self.policy_id:
+                self.update_status(
+                    policy.get("enabled", False)
+                )
+                return
+
+    commands = {
+        "DON": cmd_on,
+        "DOF": cmd_off,
+        "QUERY": cmd_query
+    }
+
+
 class UniFiPortNode(udi_interface.Node):
 
     id = "unifiport"
@@ -555,6 +704,7 @@ class Controller(udi_interface.Node):
         self.client_nodes = {}
         self.client_group_name = "IoX"
         self.port_nodes = {}
+        self.firewall_nodes = {}
 
     def configure(self, params):
         host = params.get("host")
@@ -688,6 +838,49 @@ class Controller(udi_interface.Node):
                 self.client_nodes[address] = node
 
             self.client_nodes[address].update_status(online)
+
+        # Discover user-created UniFi firewall policies.
+        policies = self.client.get_firewall_policies()
+
+        user_policies = [
+            policy for policy in policies
+            if policy.get("predefined") is False
+        ]
+
+        LOGGER.info(
+            "Discovered %d user-created UniFi firewall policy/policies",
+            len(user_policies)
+        )
+
+        for policy in user_policies:
+            policy_id = policy.get("_id")
+            policy_name = policy.get("name")
+
+            if not policy_id or not policy_name:
+                continue
+
+            # IoX addresses must be short and stable.
+            address = "uf" + policy_id[-12:]
+
+            if address not in self.firewall_nodes:
+                # IoX rejects node names containing double quotes.
+                name = policy_name.replace('"', '').strip()
+
+                node = UniFiFirewallPolicyNode(
+                    self.poly,
+                    self.address,
+                    address,
+                    name,
+                    self.client,
+                    policy_id
+                )
+
+                self.poly.addNode(node)
+                self.firewall_nodes[address] = node
+
+            self.firewall_nodes[address].update_status(
+                policy.get("enabled", False)
+            )
 
         # Discover UniFi switch ports.
         devices = self.client.get_devices()
@@ -843,6 +1036,22 @@ class Controller(udi_interface.Node):
                 node.update_status(
                     node.mac in online_macs
                 )
+
+            policies = self.client.get_firewall_policies()
+
+            firewall_by_id = {
+                policy.get("_id"): policy
+                for policy in policies
+                if policy.get("predefined") is False
+            }
+
+            for node in self.firewall_nodes.values():
+                policy = firewall_by_id.get(node.policy_id)
+
+                if policy:
+                    node.update_status(
+                        policy.get("enabled", False)
+                    )
 
             self.update_ports()
 

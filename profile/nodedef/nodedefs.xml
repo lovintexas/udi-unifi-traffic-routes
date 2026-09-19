@@ -31,6 +31,19 @@
     </sts>
   </nodeDef>
 
+  <nodeDef id="unififirewall" nls="unififirewall">
+    <sts>
+      <st id="ST" editor="bool"/>
+    </sts>
+    <cmds>
+      <accepts>
+        <cmd id="DON"/>
+        <cmd id="DOF"/>
+        <cmd id="QUERY"/>
+      </accepts>
+    </cmds>
+  </nodeDef>
+
   <nodeDef id="unifiport" nls="unifiport">
     <sts>
       <st id="ST" editor="bool"/>
