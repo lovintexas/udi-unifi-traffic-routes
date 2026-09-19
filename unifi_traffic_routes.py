@@ -62,6 +62,101 @@ class UniFiClient:
         response.raise_for_status()
         return response.json()
 
+    def get_client_groups(self):
+        url = (
+            f"https://{self.host}"
+            "/proxy/network/v2/api/site/default/network-members-groups"
+        )
+
+        response = self.session.get(url, timeout=15)
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.get(url, timeout=15)
+
+        response.raise_for_status()
+        return response.json()
+
+    def get_clients(self):
+        url = (
+            f"https://{self.host}"
+            "/proxy/network/api/s/default/stat/sta"
+        )
+
+        response = self.session.get(url, timeout=15)
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.get(url, timeout=15)
+
+        response.raise_for_status()
+
+        data = response.json()
+        return data.get("data", [])
+
+    def get_client_name(self, mac):
+        end = int(time.time() * 1000)
+        start = end - (24 * 60 * 60 * 1000)
+
+        url = (
+            f"https://{self.host}"
+            f"/proxy/network/v2/api/site/default/traffic/{mac}"
+        )
+
+        params = {
+            "start": start,
+            "end": end,
+            "includeUnidentified": "true",
+            "mac": mac
+        }
+
+        response = self.session.get(
+            url,
+            params=params,
+            timeout=15
+        )
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.get(
+                url,
+                params=params,
+                timeout=15
+            )
+
+        response.raise_for_status()
+        data = response.json()
+
+        def find_name(obj):
+            if isinstance(obj, dict):
+                if (
+                    obj.get("mac", "").lower() == mac.lower()
+                    and obj.get("name")
+                ):
+                    return obj.get("name")
+
+                for value in obj.values():
+                    result = find_name(value)
+                    if result:
+                        return result
+
+            elif isinstance(obj, list):
+                for value in obj:
+                    result = find_name(value)
+                    if result:
+                        return result
+
+            return None
+
+        name = find_name(data)
+
+        if name:
+            # IoX rejects node names containing double quotes.
+            name = name.replace('"', '')
+            return name.strip()
+
+        return None
+
     def set_enabled(self, route_id, enabled):
         routes = self.get_routes()
 
@@ -148,6 +243,24 @@ class TrafficRouteNode(udi_interface.Node):
     }
 
 
+class UniFiClientNode(udi_interface.Node):
+
+    id = "unificlient"
+
+    drivers = [
+        {"driver": "ST", "value": 0, "uom": 2}
+    ]
+
+    def __init__(self, polyglot, primary, address, name, mac):
+
+        super().__init__(polyglot, primary, address, name)
+
+        self.mac = mac.lower()
+
+    def update_status(self, online):
+        self.setDriver("ST", 1 if online else 0)
+
+
 class Controller(udi_interface.Node):
 
     id = "controller"
@@ -167,6 +280,8 @@ class Controller(udi_interface.Node):
         self.poly = polyglot
         self.client = None
         self.route_nodes = {}
+        self.client_nodes = {}
+        self.client_group_name = "IoX"
 
     def configure(self, params):
         host = params.get("host")
@@ -234,11 +349,87 @@ class Controller(udi_interface.Node):
                 route.get("enabled", False)
             )
 
-    def poll(self, polltype):
-        if polltype != "shortPoll":
+        groups = self.client.get_client_groups()
+
+        group = next(
+            (
+                g for g in groups
+                if g.get("name") == self.client_group_name
+                and g.get("type") == "CLIENTS"
+            ),
+            None
+        )
+
+        if group is None:
+            LOGGER.info(
+                "UniFi client group '%s' not found",
+                self.client_group_name
+            )
             return
 
+        member_macs = {
+            mac.lower()
+            for mac in group.get("members", [])
+        }
+
+        LOGGER.info(
+            "UniFi client group '%s' contains %d client(s)",
+            self.client_group_name,
+            len(member_macs)
+        )
+
+        clients = self.client.get_clients()
+
+        clients_by_mac = {
+            c.get("mac", "").lower(): c
+            for c in clients
+            if c.get("mac")
+        }
+
+        for mac in member_macs:
+            client = clients_by_mac.get(mac)
+
+            online = client is not None
+
+            address = "uc" + mac.replace(":", "")
+
+            if address not in self.client_nodes:
+                try:
+                    name = self.client.get_client_name(mac) or mac
+                except Exception:
+                    LOGGER.exception(
+                        "Unable to retrieve UniFi name for client %s",
+                        mac
+                    )
+                    name = mac
+
+                node = UniFiClientNode(
+                    self.poly,
+                    self.address,
+                    address,
+                    name,
+                    mac
+                )
+
+                self.poly.addNode(node)
+                self.client_nodes[address] = node
+
+            self.client_nodes[address].update_status(online)
+
+    def poll(self, polltype):
         if not self.client:
+            return
+
+        if polltype == "longPoll":
+            try:
+                self.discover()
+                self.setDriver("ST", 1)
+            except Exception:
+                LOGGER.exception("UniFi discovery poll failed")
+                self.setDriver("ST", 0)
+            return
+
+        if polltype != "shortPoll":
             return
 
         try:
@@ -256,6 +447,19 @@ class Controller(udi_interface.Node):
                     node.update_status(
                         route.get("enabled", False)
                     )
+
+            clients = self.client.get_clients()
+
+            online_macs = {
+                c.get("mac", "").lower()
+                for c in clients
+                if c.get("mac")
+            }
+
+            for node in self.client_nodes.values():
+                node.update_status(
+                    node.mac in online_macs
+                )
 
             self.setDriver("ST", 1)
 

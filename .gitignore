@@ -17,3 +17,12 @@ test_unifi.py
 .DS_Store
 *.swp
 *~
+unifi_credentials.json
+
+# Local UniFi API development/probes
+probe_*.py
+save_unifi_credentials.py
+
+# Local backups
+*.bak
+groups_output*.txt

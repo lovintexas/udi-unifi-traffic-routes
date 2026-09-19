@@ -25,4 +25,10 @@
     </cmds>
   </nodeDef>
 
+  <nodeDef id="unificlient" nls="unificlient">
+    <sts>
+      <st id="ST" editor="bool"/>
+    </sts>
+  </nodeDef>
+
 </nodeDefs>

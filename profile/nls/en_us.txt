@@ -6,3 +6,5 @@ ST-ST-NAME = Status
 CMD-DON-NAME = Enable
 CMD-DOF-NAME = Disable
 CMD-QUERY-NAME = Query
+
+ND-unificlient-NAME = UniFi Client
