@@ -1,0 +1,10 @@
+{
+  "name": "UniFi Traffic Routes",
+  "docs": "README.md",
+  "executable": "unifi_traffic_routes.py",
+  "install": "install.sh",
+  "notice": "NOTICE",
+  "shortPoll": 30,
+  "longPoll": 300,
+  "profile_version": "1.0.0"
+}

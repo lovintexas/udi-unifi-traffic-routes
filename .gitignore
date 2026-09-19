@@ -1,0 +1,19 @@
+# PG3x runtime files
+NSplugin_*.lock
+svc.pid
+plugin_*.cert
+plugin_*.key
+logs/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Local testing / development
+test_unifi.py
+
+# OS/editor junk
+.DS_Store
+*.swp
+*~

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<editors>
+  <editor id="bool">
+    <range uom="2" min="0" max="1" step="1"/>
+  </editor>
+</editors>

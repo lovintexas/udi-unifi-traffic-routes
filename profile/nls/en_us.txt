@@ -1,0 +1,8 @@
+ND-controller-NAME = UniFi Traffic Routes
+ND-unifiroute-NAME = Traffic Route
+
+ST-ST-NAME = Status
+
+CMD-DON-NAME = Enable
+CMD-DOF-NAME = Disable
+CMD-QUERY-NAME = Query

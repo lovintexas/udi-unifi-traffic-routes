@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<nodeDefs>
+
+  <nodeDef id="controller" nls="controller">
+    <sts>
+      <st id="ST" editor="bool"/>
+    </sts>
+    <cmds>
+      <sends>
+        <cmd id="QUERY"/>
+      </sends>
+    </cmds>
+  </nodeDef>
+
+  <nodeDef id="unifiroute" nls="unifiroute">
+    <sts>
+      <st id="ST" editor="bool"/>
+    </sts>
+    <cmds>
+      <accepts>
+        <cmd id="DON"/>
+        <cmd id="DOF"/>
+        <cmd id="QUERY"/>
+      </accepts>
+    </cmds>
+  </nodeDef>
+
+</nodeDefs>
