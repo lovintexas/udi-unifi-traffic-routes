@@ -30,6 +30,15 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <tr><td><code>username</code></td><td>Dedicated local UniFi account used by the plugin.</td></tr>
 <tr><td><code>password</code></td><td>Password for that local UniFi account.</td></tr></table>
 <div class="callout"><strong>Recommended:</strong> use a dedicated local UniFi account for IoX rather than a personal administrator account.</div>
+<h3>UniFi Account Permissions</h3>
+<p>Configure the dedicated account in the UniFi console with:</p>
+<ul>
+<li><strong>Account Type:</strong> Admin</li>
+<li><strong>Network:</strong> Full Admin</li>
+<li><strong>Local Account Only:</strong> Enabled</li>
+</ul>
+<p>The plugin requires Network administrative access because it performs both read and write operations, including Traffic Route control, client Block/Unblock, PoE control, and firewall policy enable/disable.</p>
+<p>Permissions for other UniFi applications such as Protect, Access, Talk, and Control Plane are not required by this plugin.</p>
 <h3>Client selection</h3><p>Create a UniFi Network client group named <code>IoX</code> (type <code>CLIENTS</code>) and add only the clients that should appear as IoX client nodes.</p>
 <h3>Startup</h3><div class="flow"><span class="step">Read PG3x parameters</span><span class="arrow">→</span><span class="step">Local UniFi login</span><span class="arrow">→</span><span class="step">Discover objects</span><span class="arrow">→</span><span class="step">Create/update IoX nodes</span></div>
 <p>If initial authentication fails, the controller is marked unavailable and the plugin does not continuously retry the login. Correcting the custom parameters or restarting the plugin initiates another attempt.</p></section>

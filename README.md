@@ -126,9 +126,17 @@ The plugin has been developed and tested with a Ubiquiti UDM Pro.
 
 Create a dedicated local UniFi user for the plugin rather than using your primary UniFi administrator account.
 
-The account must have sufficient permissions to read and modify the UniFi objects controlled by the plugin.
+In the UniFi console, configure the account as:
 
-Using a dedicated account allows its credentials and permissions to be managed independently from your normal UniFi administrator account.
+- **Account Type:** Admin
+- **Network:** Full Admin
+- **Local Account Only:** Enabled
+
+The plugin requires Network administrative access because it performs both read and write operations, including Traffic Route control, client Block/Unblock, PoE control, and firewall policy enable/disable.
+
+Permissions for other UniFi applications such as Protect, Access, Talk, and Control Plane are not required by this plugin.
+
+Using a dedicated local account allows its credentials and permissions to be managed independently from your normal UniFi administrator account.
 
 ### IoX Client Group
 
