@@ -95,6 +95,69 @@ class UniFiClient:
         data = response.json()
         return data.get("data", [])
 
+    def get_blocked_clients(self):
+        url = (
+            f"https://{self.host}"
+            "/proxy/network/v2/api/site/default/clients/history"
+        )
+
+        response = self.session.get(
+            url,
+            params={
+                "onlyBlocked": "true",
+                "withinHours": 0
+            },
+            timeout=15
+        )
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.get(
+                url,
+                params={
+                    "onlyBlocked": "true",
+                    "withinHours": 0
+                },
+                timeout=15
+            )
+
+        response.raise_for_status()
+
+        data = response.json()
+
+        if isinstance(data, dict):
+            return data.get("data", [])
+
+        return data
+
+    def set_client_blocked(self, mac, blocked):
+        url = (
+            f"https://{self.host}"
+            "/proxy/network/api/s/default/cmd/stamgr"
+        )
+
+        payload = {
+            "mac": mac,
+            "cmd": "block-sta" if blocked else "unblock-sta"
+        }
+
+        response = self.session.post(
+            url,
+            json=payload,
+            timeout=15
+        )
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.post(
+                url,
+                json=payload,
+                timeout=15
+            )
+
+        response.raise_for_status()
+        return response.json()
+
     def get_devices(self):
         url = (
             f"https://{self.host}"
@@ -375,17 +438,93 @@ class UniFiClientNode(udi_interface.Node):
     id = "unificlient"
 
     drivers = [
-        {"driver": "ST", "value": 0, "uom": 2}
+        {"driver": "ST", "value": 0, "uom": 2},
+        {"driver": "GV1", "value": 0, "uom": 2}
     ]
 
-    def __init__(self, polyglot, primary, address, name, mac):
-
+    def __init__(
+        self,
+        polyglot,
+        primary,
+        address,
+        name,
+        mac,
+        client
+    ):
         super().__init__(polyglot, primary, address, name)
 
         self.mac = mac.lower()
+        self.client = client
 
     def update_status(self, online):
         self.setDriver("ST", 1 if online else 0)
+
+    def update_blocked(self, blocked):
+        self.setDriver("GV1", 1 if blocked else 0)
+
+    def _refresh_blocked(self, delay=3):
+        try:
+            if delay:
+                time.sleep(delay)
+
+            blocked_clients = self.client.get_blocked_clients()
+
+            blocked_macs = {
+                item.get("mac", "").lower()
+                for item in blocked_clients
+                if item.get("mac")
+            }
+
+            self.update_blocked(
+                self.mac in blocked_macs
+            )
+
+        except Exception:
+            LOGGER.exception(
+                "Client blocked-state refresh failed: %s",
+                self.name
+            )
+
+    def _schedule_blocked_refresh(self):
+        threading.Thread(
+            target=self._refresh_blocked,
+            daemon=True
+        ).start()
+
+    def cmd_block(self, command):
+        LOGGER.info(
+            "Blocking UniFi client: %s",
+            self.name
+        )
+
+        self.client.set_client_blocked(
+            self.mac,
+            True
+        )
+
+        self._schedule_blocked_refresh()
+
+    def cmd_unblock(self, command):
+        LOGGER.info(
+            "Unblocking UniFi client: %s",
+            self.name
+        )
+
+        self.client.set_client_blocked(
+            self.mac,
+            False
+        )
+
+        self._schedule_blocked_refresh()
+
+    def cmd_query(self, command):
+        self._refresh_blocked(delay=0)
+
+    commands = {
+        "BLOCK": cmd_block,
+        "UNBLOCK": cmd_unblock,
+        "QUERY": cmd_query
+    }
 
 
 class UniFiFirewallPolicyNode(udi_interface.Node):
@@ -831,7 +970,8 @@ class Controller(udi_interface.Node):
                     self.address,
                     address,
                     name,
-                    mac
+                    mac,
+                    self.client
                 )
 
                 self.poly.addNode(node)
@@ -1032,9 +1172,20 @@ class Controller(udi_interface.Node):
                 if c.get("mac")
             }
 
+            blocked_clients = self.client.get_blocked_clients()
+
+            blocked_macs = {
+                c.get("mac", "").lower()
+                for c in blocked_clients
+                if c.get("mac")
+            }
+
             for node in self.client_nodes.values():
                 node.update_status(
                     node.mac in online_macs
+                )
+                node.update_blocked(
+                    node.mac in blocked_macs
                 )
 
             policies = self.client.get_firewall_policies()

@@ -28,7 +28,15 @@
   <nodeDef id="unificlient" nls="unificlient">
     <sts>
       <st id="ST" editor="bool"/>
+      <st id="GV1" editor="bool"/>
     </sts>
+    <cmds>
+      <accepts>
+        <cmd id="BLOCK"/>
+        <cmd id="UNBLOCK"/>
+        <cmd id="QUERY"/>
+      </accepts>
+    </cmds>
   </nodeDef>
 
   <nodeDef id="unififirewall" nls="unififirewall">
