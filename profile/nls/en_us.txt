@@ -8,3 +8,12 @@ CMD-DOF-NAME = Disable
 CMD-QUERY-NAME = Query
 
 ND-unificlient-NAME = UniFi Client
+
+ND-unifiport-NAME = UniFi Switch Port
+ND-unifipoeport-NAME = UniFi PoE Switch Port
+ST-GV1-NAME = Link Speed
+ST-GV2-NAME = PoE Enabled
+ST-GV3-NAME = PoE Power
+CMD-POEON-NAME = PoE On
+CMD-POEOFF-NAME = PoE Off
+CMD-POECYCLE-NAME = PoE Cycle

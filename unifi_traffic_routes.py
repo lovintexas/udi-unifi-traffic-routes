@@ -2,6 +2,7 @@
 
 import sys
 import time
+import threading
 import requests
 import urllib3
 import udi_interface
@@ -93,6 +94,81 @@ class UniFiClient:
 
         data = response.json()
         return data.get("data", [])
+
+    def get_devices(self):
+        url = (
+            f"https://{self.host}"
+            "/proxy/network/api/s/default/stat/device"
+        )
+
+        response = self.session.get(url, timeout=15)
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.get(url, timeout=15)
+
+        response.raise_for_status()
+
+        data = response.json()
+        return data.get("data", [])
+
+    def set_port_poe_mode(self, switch_id, port_idx, poe_mode):
+        devices = self.get_devices()
+
+        switch = next(
+            (
+                device for device in devices
+                if device.get("_id") == switch_id
+            ),
+            None
+        )
+
+        if not switch:
+            raise RuntimeError(
+                f"UniFi switch {switch_id} not found"
+            )
+
+        overrides = [
+            dict(item)
+            for item in switch.get("port_overrides", [])
+        ]
+
+        target = next(
+            (
+                item for item in overrides
+                if item.get("port_idx") == port_idx
+            ),
+            None
+        )
+
+        if not target:
+            raise RuntimeError(
+                f"Port {port_idx} override not found"
+            )
+
+        target["poe_mode"] = poe_mode
+
+        url = (
+            f"https://{self.host}"
+            f"/proxy/network/api/s/default/rest/device/{switch_id}"
+        )
+
+        response = self.session.put(
+            url,
+            json={"port_overrides": overrides},
+            timeout=15
+        )
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.put(
+                url,
+                json={"port_overrides": overrides},
+                timeout=15
+            )
+
+        response.raise_for_status()
+        return response.json()
 
     def get_client_name(self, mac):
         end = int(time.time() * 1000)
@@ -261,6 +337,202 @@ class UniFiClientNode(udi_interface.Node):
         self.setDriver("ST", 1 if online else 0)
 
 
+class UniFiPortNode(udi_interface.Node):
+
+    id = "unifiport"
+
+    drivers = [
+        {"driver": "ST",  "value": 0, "uom": 2},
+        {"driver": "GV1", "value": 0, "uom": 56},
+    ]
+
+    def __init__(
+        self,
+        polyglot,
+        primary,
+        address,
+        name,
+        switch_id,
+        switch_mac,
+        port_idx
+    ):
+        super().__init__(polyglot, primary, address, name)
+
+        self.switch_id = switch_id
+        self.switch_mac = switch_mac.lower()
+        self.port_idx = port_idx
+
+    def update_status(self, port):
+        self.setDriver("ST", 1 if port.get("up") else 0)
+        self.setDriver("GV1", port.get("speed") or 0)
+
+
+class UniFiPoePortNode(udi_interface.Node):
+
+    id = "unifipoeport"
+
+    drivers = [
+        {"driver": "ST",  "value": 0, "uom": 2},
+        {"driver": "GV1", "value": 0, "uom": 56},
+        {"driver": "GV2", "value": 0, "uom": 2},
+        {"driver": "GV3", "value": 0, "uom": 73},
+    ]
+
+    def __init__(
+        self,
+        polyglot,
+        primary,
+        address,
+        name,
+        client,
+        switch_id,
+        switch_mac,
+        port_idx
+    ):
+        super().__init__(polyglot, primary, address, name)
+
+        self.client = client
+        self.switch_id = switch_id
+        self.switch_mac = switch_mac.lower()
+        self.port_idx = port_idx
+
+    def update_status(self, port):
+        self.setDriver("ST", 1 if port.get("up") else 0)
+        self.setDriver("GV1", port.get("speed") or 0)
+        poe_mode = port.get("poe_mode")
+
+        if poe_mode == "auto":
+            poe_status = 1
+        else:
+            poe_status = 0
+
+        self.setDriver("GV2", poe_status)
+
+        try:
+            power = float(port.get("poe_power") or 0)
+        except (TypeError, ValueError):
+            power = 0
+
+        self.setDriver("GV3", power)
+
+    def _refresh_port(self, delay=2):
+        """Read this port back from UniFi and update IoX."""
+        try:
+            if delay:
+                time.sleep(delay)
+
+            devices = self.client.get_devices()
+
+            for switch in devices:
+                if switch.get("_id") != self.switch_id:
+                    continue
+
+                for port in switch.get("port_table", []):
+                    if port.get("port_idx") == self.port_idx:
+                        self.update_status(port)
+                        return
+
+            LOGGER.warning(
+                "Unable to refresh PoE port: %s port %s",
+                self.name,
+                self.port_idx
+            )
+
+        except Exception:
+            LOGGER.exception(
+                "PoE port refresh failed: %s port %s",
+                self.name,
+                self.port_idx
+            )
+
+    def _delayed_refresh(self):
+        self._refresh_port(delay=2)
+
+    def cmd_poe_on(self, command):
+        LOGGER.info(
+            "Enabling PoE: %s port %s",
+            self.name,
+            self.port_idx
+        )
+
+        self.client.set_port_poe_mode(
+            self.switch_id,
+            self.port_idx,
+            "auto"
+        )
+
+        threading.Thread(
+            target=self._delayed_refresh,
+            daemon=True
+        ).start()
+
+    def cmd_poe_off(self, command):
+        LOGGER.info(
+            "Disabling PoE: %s port %s",
+            self.name,
+            self.port_idx
+        )
+
+        self.client.set_port_poe_mode(
+            self.switch_id,
+            self.port_idx,
+            "off"
+        )
+
+        threading.Thread(
+            target=self._delayed_refresh,
+            daemon=True
+        ).start()
+
+    def _poe_cycle(self):
+        try:
+            LOGGER.info(
+                "Cycling PoE: %s port %s",
+                self.name,
+                self.port_idx
+            )
+
+            self.client.set_port_poe_mode(
+                self.switch_id,
+                self.port_idx,
+                "off"
+            )
+
+            # Verify the actual Off state from UniFi.
+            self._refresh_port(delay=2)
+
+            # Keep PoE off for approximately five seconds total.
+            time.sleep(3)
+
+            self.client.set_port_poe_mode(
+                self.switch_id,
+                self.port_idx,
+                "auto"
+            )
+
+            # Verify the actual restored state from UniFi.
+            self._refresh_port(delay=2)
+
+        except Exception:
+            LOGGER.exception(
+                "PoE cycle failed: %s port %s",
+                self.name,
+                self.port_idx
+            )
+
+    def cmd_poe_cycle(self, command):
+        threading.Thread(
+            target=self._poe_cycle,
+            daemon=True
+        ).start()
+
+    commands = {
+        "POEON": cmd_poe_on,
+        "POEOFF": cmd_poe_off,
+        "POECYCLE": cmd_poe_cycle
+    }
+
+
 class Controller(udi_interface.Node):
 
     id = "controller"
@@ -282,6 +554,7 @@ class Controller(udi_interface.Node):
         self.route_nodes = {}
         self.client_nodes = {}
         self.client_group_name = "IoX"
+        self.port_nodes = {}
 
     def configure(self, params):
         host = params.get("host")
@@ -416,6 +689,116 @@ class Controller(udi_interface.Node):
 
             self.client_nodes[address].update_status(online)
 
+        # Discover UniFi switch ports.
+        devices = self.client.get_devices()
+
+        switches = [
+            device for device in devices
+            if device.get("type") == "usw"
+        ]
+
+        LOGGER.info(
+            "Discovered %d UniFi switch(es)",
+            len(switches)
+        )
+
+        for switch in switches:
+            switch_id = switch.get("_id")
+            switch_mac = switch.get("mac", "")
+            switch_name = (
+                switch.get("name")
+                or switch.get("model")
+                or switch_mac
+                or "UniFi Switch"
+            )
+
+            # Shorten common UniFi model prefixes for IoX display.
+            for prefix in ("US 8 60W ", "USW Flex Mini "):
+                if switch_name.startswith(prefix):
+                    switch_name = switch_name[len(prefix):]
+                    break
+
+            if not switch_id or not switch_mac:
+                continue
+
+            for port in switch.get("port_table", []):
+                port_idx = port.get("port_idx")
+
+                if port_idx is None:
+                    continue
+
+                port_name = (
+                    port.get("name")
+                    or f"Port {port_idx}"
+                )
+
+                name = f"{port_name} - {switch_name}"
+
+                # Stable IoX address based on switch MAC and physical port.
+                address = (
+                    "up"
+                    + switch_mac.replace(":", "")[-10:]
+                    + f"{int(port_idx):02d}"
+                )
+
+                if address not in self.port_nodes:
+                    if port.get("port_poe"):
+                        node = UniFiPoePortNode(
+                            self.poly,
+                            self.address,
+                            address,
+                            name,
+                            self.client,
+                            switch_id,
+                            switch_mac,
+                            port_idx
+                        )
+                    else:
+                        node = UniFiPortNode(
+                            self.poly,
+                            self.address,
+                            address,
+                            name,
+                            switch_id,
+                            switch_mac,
+                            port_idx
+                        )
+
+                    self.poly.addNode(node)
+                    self.port_nodes[address] = node
+
+                self.port_nodes[address].update_status(port)
+
+    def update_ports(self):
+        try:
+            devices = self.client.get_devices()
+
+            for switch in devices:
+                if switch.get("type") != "usw":
+                    continue
+
+                switch_mac = switch.get("mac", "")
+                if not switch_mac:
+                    continue
+
+                for port in switch.get("port_table", []):
+                    port_idx = port.get("port_idx")
+                    if port_idx is None:
+                        continue
+
+                    address = (
+                        "up"
+                        + switch_mac.replace(":", "")[-10:]
+                        + f"{int(port_idx):02d}"
+                    )
+
+                    node = self.port_nodes.get(address)
+                    if node:
+                        node.update_status(port)
+
+        except Exception:
+            LOGGER.exception("Error updating UniFi switch ports")
+
     def poll(self, polltype):
         if not self.client:
             return
@@ -460,6 +843,8 @@ class Controller(udi_interface.Node):
                 node.update_status(
                     node.mac in online_macs
                 )
+
+            self.update_ports()
 
             self.setDriver("ST", 1)
 

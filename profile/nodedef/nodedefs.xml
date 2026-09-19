@@ -31,4 +31,27 @@
     </sts>
   </nodeDef>
 
+  <nodeDef id="unifiport" nls="unifiport">
+    <sts>
+      <st id="ST" editor="bool"/>
+      <st id="GV1" editor="portspeed"/>
+    </sts>
+  </nodeDef>
+
+  <nodeDef id="unifipoeport" nls="unifipoeport">
+    <sts>
+      <st id="ST" editor="bool"/>
+      <st id="GV1" editor="portspeed"/>
+      <st id="GV2" editor="poestatus"/>
+      <st id="GV3" editor="poepower"/>
+    </sts>
+    <cmds>
+      <accepts>
+        <cmd id="POEON"/>
+        <cmd id="POEOFF"/>
+        <cmd id="POECYCLE"/>
+      </accepts>
+    </cmds>
+  </nodeDef>
+
 </nodeDefs>
