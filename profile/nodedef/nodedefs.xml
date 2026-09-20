@@ -25,6 +25,19 @@
     </cmds>
   </nodeDef>
 
+  <nodeDef id="unifissid" nls="unifissid">
+    <sts>
+      <st id="ST" editor="bool"/>
+    </sts>
+    <cmds>
+      <accepts>
+        <cmd id="DON"/>
+        <cmd id="DOF"/>
+        <cmd id="QUERY"/>
+      </accepts>
+    </cmds>
+  </nodeDef>
+
   <nodeDef id="unificlient" nls="unificlient">
     <sts>
       <st id="ST" editor="bool"/>

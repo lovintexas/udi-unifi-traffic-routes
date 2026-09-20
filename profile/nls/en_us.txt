@@ -23,3 +23,6 @@ ST-unififirewall-ST-NAME = Enabled
 ST-unificlient-GV1-NAME = Blocked
 CMD-BLOCK-NAME = Block
 CMD-UNBLOCK-NAME = Unblock
+
+ND-unifissid-NAME = UniFi SSID
+ST-unifissid-ST-NAME = Enabled

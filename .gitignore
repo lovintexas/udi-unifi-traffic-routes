@@ -26,3 +26,4 @@ save_unifi_credentials.py
 # Local backups
 *.bak
 groups_output*.txt
+unifi_traffic_routes.py.pre-ssid

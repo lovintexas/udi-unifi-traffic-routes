@@ -17,6 +17,19 @@ The plugin connects directly to a UniFi console using the local UniFi Network AP
 - Periodically polls UniFi so changes made outside IoX are reflected in IoX
 - Changes only the `enabled` state of an existing Traffic Route
 
+### Wi-Fi SSIDs
+
+- Automatically discovers configured UniFi Wi-Fi SSIDs
+- Creates an IoX node for each discovered SSID
+- Displays the current enabled/disabled state
+- Enable an SSID from IoX
+- Disable an SSID from IoX
+- Query current SSID status
+- Periodically polls UniFi so changes made outside IoX are reflected in IoX
+- Changes only the `enabled` state of an existing SSID
+
+SSID control can be used with IoX programs to schedule Wi-Fi availability without depending on individual client MAC addresses.
+
 ### UniFi Clients
 
 Client nodes are created for clients placed in a UniFi Network client group named:
@@ -181,6 +194,15 @@ Provides:
 - Disable
 - Query
 
+### UniFi SSID
+
+Provides:
+
+- Enabled status
+- Enable
+- Disable
+- Query
+
 ### UniFi Client
 
 Provides:
@@ -337,6 +359,18 @@ Authentication uses the UniFi session cookie and CSRF token.
 ### Traffic Routes
 
 `/proxy/network/v2/api/site/default/trafficroutes`
+
+### Wi-Fi SSIDs
+
+Read configured SSIDs:
+
+`GET /proxy/network/api/s/default/rest/wlanconf`
+
+Enable/disable an SSID:
+
+`PUT /proxy/network/api/s/default/rest/wlanconf/{wlan_id}`
+
+SSID control preserves the existing WLAN configuration and changes only its `enabled` state.
 
 ### Client Groups
 

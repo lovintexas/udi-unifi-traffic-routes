@@ -15,11 +15,12 @@ ul{margin:8px 0 8px 21px;padding:0}li{margin:5px 0}.small{color:var(--muted);fon
 footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:650px){h1{font-size:32px}.card{padding:20px}}@media print{body{background:white}.card{box-shadow:none;break-inside:avoid}main{margin-top:0}}
 </style></head><body>
 <header><div class="wrap"><div class="eyebrow">Universal Devices • PG3x Plugin</div><h1>UniFi Traffic Routes</h1>
-<div class="subtitle">IoX integration for selected UniFi Network controls and monitoring: traffic routes, designated clients, switch ports, PoE, and user-created firewall policies.</div>
+<div class="subtitle">IoX integration for selected UniFi Network controls and monitoring: traffic routes, Wi-Fi SSIDs, designated clients, switch ports, PoE, and user-created firewall policies.</div>
 <div class="badges"><span class="badge">Local UniFi API</span><span class="badge">IoX / eisy</span><span class="badge">PG3x</span><span class="badge">Local control</span></div></div></header>
 <main>
 <section class="card"><h2>Overview</h2><p class="lead">The plugin presents useful UniFi Network objects as native IoX nodes so they can participate in IoX programs, UD Mobile, status displays, and automation.</p>
 <div class="grid"><div class="feature"><strong>Traffic Routes</strong>Monitor and enable/disable discovered UniFi Traffic Routes.</div>
+<div class="feature"><strong>Wi-Fi SSIDs</strong>Monitor and enable/disable configured UniFi Wi-Fi networks from IoX.</div>
 <div class="feature"><strong>Selected Clients</strong>Monitor online state and blocked state for clients placed in the UniFi <code>IoX</code> client group.</div>
 <div class="feature"><strong>Switch Ports</strong>Monitor physical link state and negotiated link speed.</div>
 <div class="feature"><strong>PoE Ports</strong>Monitor configured PoE state and power, with PoE On, Off, and Cycle.</div>
@@ -46,12 +47,14 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <section class="card"><h2>IoX Nodes &amp; Functions</h2><table><tr><th>Node</th><th>Status / Drivers</th><th>Commands</th></tr>
 <tr><td><strong>Controller</strong></td><td>Connection/operational status</td><td>Query</td></tr>
 <tr><td><strong>Traffic Route</strong></td><td>Enabled state</td><td>Enable, Disable, Query</td></tr>
+<tr><td><strong>UniFi SSID</strong></td><td>Enabled state</td><td>Enable, Disable, Query</td></tr>
 <tr><td><strong>UniFi Client</strong></td><td>Status (online/offline), Blocked (true/false)</td><td>Block, Unblock, Query</td></tr>
 <tr><td><strong>Switch Port</strong></td><td>Link state, link speed</td><td>Monitoring</td></tr>
 <tr><td><strong>PoE Switch Port</strong></td><td>Link state, link speed, PoE Enabled, PoE power</td><td>PoE On, PoE Off, PoE Cycle</td></tr>
 <tr><td><strong>Firewall Policy</strong></td><td>Enabled state</td><td>Enable, Disable, Query</td></tr></table></section>
 
 <section class="card"><h2>How Status Is Determined</h2>
+<h3>Wi-Fi SSIDs</h3><p><strong>Enabled status</strong> reflects the current UniFi WLAN configuration. Enable and Disable commands change only the SSID's <code>enabled</code> state while preserving the existing WLAN configuration.</p>
 <h3>Clients</h3><p><strong>Online status</strong> comes from UniFi's active-station data. A client absent from that list is reported offline.</p>
 <p><strong>Blocked status</strong> is tracked independently using UniFi's current blocked-client history. A blocked client normally disappears from the active-station list, so a node can correctly show <em>Status: False</em> and <em>Blocked: True</em>.</p>
 <div class="callout ok">Block and Unblock commands are followed by delayed readback of UniFi's actual blocked-client state rather than an assumed optimistic change.</div>
@@ -59,7 +62,7 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <h3>Firewall policies</h3><p>Only policies for which UniFi reports <code>predefined = false</code> are exposed. The plugin changes only the enabled state; it does not edit matching, action, networks, ports, or other policy content.</p></section>
 
 <section class="card"><h2>Polling &amp; Discovery</h2><p>The current installation uses approximately <strong>60-second short polling</strong> for routine status and <strong>300-second long polling</strong> for discovery. Commands requiring verification perform their own delayed readback.</p>
-<ul><li>Short polling refreshes traffic routes, selected clients, firewall policies, and switch ports.</li><li>Long polling discovers newly available objects.</li><li>Client nodes are created only for members of the UniFi <code>IoX</code> client group.</li></ul></section>
+<ul><li>Short polling refreshes traffic routes, Wi-Fi SSIDs, selected clients, firewall policies, and switch ports.</li><li>Long polling discovers newly available objects.</li><li>Client nodes are created only for members of the UniFi <code>IoX</code> client group.</li></ul></section>
 
 <section class="card"><h2>Design Boundaries &amp; Limitations</h2><ul>
 <li><strong>No general UniFi configuration editor.</strong> The plugin intentionally exposes a small set of well-defined controls.</li>
@@ -75,6 +78,7 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <table><tr><th>Purpose</th><th>Operation</th></tr>
 <tr><td>Authenticate</td><td><code>POST /api/auth/login</code> with session cookie and CSRF handling</td></tr>
 <tr><td>Traffic Routes</td><td><code>/proxy/network/v2/api/site/default/trafficroutes</code></td></tr>
+<tr><td>Wi-Fi SSIDs</td><td><code>GET /proxy/network/api/s/default/rest/wlanconf</code>; enable/disable via <code>PUT /proxy/network/api/s/default/rest/wlanconf/{wlan_id}</code></td></tr>
 <tr><td>Client groups</td><td><code>/proxy/network/v2/api/site/default/network-members-groups</code></td></tr>
 <tr><td>Active clients</td><td><code>/proxy/network/api/s/default/stat/sta</code></td></tr>
 <tr><td>Blocked clients</td><td><code>/proxy/network/v2/api/site/default/clients/history?onlyBlocked=true&amp;withinHours=0</code></td></tr>
@@ -88,7 +92,7 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <li>PG3x DEBUG logging may expose custom parameters. Normal operational logging should be kept below DEBUG after development.</li>
 <li>After development where credentials may have appeared in debug output, rotate the dedicated UniFi password.</li></ul></section>
 
-<section class="card"><h2>Current Development Status</h2><p>The feature set has been tested interactively against the local UniFi installation, including Traffic Route control, switch-port discovery, PoE control with verified readback, user-created firewall-policy enable/disable, client Block/Unblock, and independent blocked-state reporting.</p>
-<p class="small">Prepared 19 September 2026. This document describes the current development build and the UniFi Network API behavior observed during testing.</p></section>
+<section class="card"><h2>Current Development Status</h2><p>The feature set has been tested interactively against the local UniFi installation, including Traffic Route control, Wi-Fi SSID discovery and enable/disable, switch-port discovery, PoE control with verified readback, user-created firewall-policy enable/disable, client Block/Unblock, and independent blocked-state reporting.</p>
+<p class="small">Prepared 20 September 2026. This document describes the current development build and the UniFi Network API behavior observed during testing.</p></section>
 </main><footer><strong>UniFi Traffic Routes</strong> — PG3x / IoX integration documentation. UniFi is a product family of Ubiquiti Inc.; this document describes an independent integration.</footer>
 </body></html>

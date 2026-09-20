@@ -284,6 +284,67 @@ class UniFiClient:
         response.raise_for_status()
         return response.json()
 
+    def get_wlans(self):
+        url = (
+            f"https://{self.host}"
+            "/proxy/network/api/s/default/rest/wlanconf"
+        )
+
+        response = self.session.get(url, timeout=15)
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.get(url, timeout=15)
+
+        response.raise_for_status()
+
+        data = response.json()
+        return data.get("data", [])
+
+    def set_wlan_enabled(self, wlan_id, enabled):
+        url = (
+            f"https://{self.host}"
+            f"/proxy/network/api/s/default/rest/wlanconf/{wlan_id}"
+        )
+
+        response = self.session.get(url, timeout=15)
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.get(url, timeout=15)
+
+        response.raise_for_status()
+
+        data = response.json().get("data", [])
+
+        if not data:
+            raise RuntimeError(f"UniFi WLAN {wlan_id} not found")
+
+        wlan = dict(data[0])
+        wlan["enabled"] = bool(enabled)
+
+        # These are returned by UniFi but should not be sent back
+        # as editable WLAN configuration fields.
+        for key in ("_id", "site_id", "external_id"):
+            wlan.pop(key, None)
+
+        response = self.session.put(
+            url,
+            json=wlan,
+            timeout=15
+        )
+
+        if response.status_code in (401, 403):
+            self.login()
+            response = self.session.put(
+                url,
+                json=wlan,
+                timeout=15
+            )
+
+        response.raise_for_status()
+        return response.json()
+
     def get_client_name(self, mac):
         end = int(time.time() * 1000)
         start = end - (24 * 60 * 60 * 1000)
@@ -425,6 +486,98 @@ class TrafficRouteNode(udi_interface.Node):
             if route.get("_id") == self.route_id:
                 self.update_status(route.get("enabled", False))
                 return
+
+    commands = {
+        "DON": cmd_on,
+        "DOF": cmd_off,
+        "QUERY": cmd_query
+    }
+
+
+class UniFiSSIDNode(udi_interface.Node):
+
+    id = "unifissid"
+
+    drivers = [
+        {"driver": "ST", "value": 0, "uom": 2}
+    ]
+
+    def __init__(
+        self,
+        polyglot,
+        primary,
+        address,
+        name,
+        client,
+        wlan_id
+    ):
+        super().__init__(polyglot, primary, address, name)
+
+        self.client = client
+        self.wlan_id = wlan_id
+
+    def update_status(self, enabled):
+        self.setDriver("ST", 1 if enabled else 0)
+
+    def _refresh(self, delay=2):
+        try:
+            if delay:
+                time.sleep(delay)
+
+            wlans = self.client.get_wlans()
+
+            for wlan in wlans:
+                if wlan.get("_id") == self.wlan_id:
+                    self.update_status(
+                        wlan.get("enabled", False)
+                    )
+                    return
+
+            LOGGER.warning(
+                "SSID not found during refresh: %s",
+                self.name
+            )
+
+        except Exception:
+            LOGGER.exception(
+                "SSID refresh failed: %s",
+                self.name
+            )
+
+    def _schedule_refresh(self):
+        threading.Thread(
+            target=self._refresh,
+            daemon=True
+        ).start()
+
+    def cmd_on(self, command):
+        LOGGER.info(
+            "Enabling UniFi SSID: %s",
+            self.name
+        )
+
+        self.client.set_wlan_enabled(
+            self.wlan_id,
+            True
+        )
+
+        self._schedule_refresh()
+
+    def cmd_off(self, command):
+        LOGGER.info(
+            "Disabling UniFi SSID: %s",
+            self.name
+        )
+
+        self.client.set_wlan_enabled(
+            self.wlan_id,
+            False
+        )
+
+        self._schedule_refresh()
+
+    def cmd_query(self, command):
+        self._refresh(delay=0)
 
     commands = {
         "DON": cmd_on,
@@ -844,6 +997,7 @@ class Controller(udi_interface.Node):
         self.client_group_name = "IoX"
         self.port_nodes = {}
         self.firewall_nodes = {}
+        self.ssid_nodes = {}
 
     def configure(self, params):
         host = params.get("host")
@@ -1020,6 +1174,43 @@ class Controller(udi_interface.Node):
 
             self.firewall_nodes[address].update_status(
                 policy.get("enabled", False)
+            )
+
+        # Discover UniFi SSIDs.
+        wlans = self.client.get_wlans()
+
+        LOGGER.info(
+            "Discovered %d UniFi SSID(s)",
+            len(wlans)
+        )
+
+        for wlan in wlans:
+            wlan_id = wlan.get("_id")
+            wlan_name = wlan.get("name")
+
+            if not wlan_id or not wlan_name:
+                continue
+
+            # Stable, short IoX address based on the UniFi WLAN ID.
+            address = "uw" + wlan_id[-12:]
+
+            if address not in self.ssid_nodes:
+                name = wlan_name.replace('"', '').strip()
+
+                node = UniFiSSIDNode(
+                    self.poly,
+                    self.address,
+                    address,
+                    name,
+                    self.client,
+                    wlan_id
+                )
+
+                self.poly.addNode(node)
+                self.ssid_nodes[address] = node
+
+            self.ssid_nodes[address].update_status(
+                wlan.get("enabled", False)
             )
 
         # Discover UniFi switch ports.
@@ -1204,6 +1395,22 @@ class Controller(udi_interface.Node):
                         policy.get("enabled", False)
                     )
 
+            wlans = self.client.get_wlans()
+
+            wlan_by_id = {
+                wlan.get("_id"): wlan
+                for wlan in wlans
+                if wlan.get("_id")
+            }
+
+            for node in self.ssid_nodes.values():
+                wlan = wlan_by_id.get(node.wlan_id)
+
+                if wlan:
+                    node.update_status(
+                        wlan.get("enabled", False)
+                    )
+
             self.update_ports()
 
             self.setDriver("ST", 1)
@@ -1248,7 +1455,7 @@ if __name__ == "__main__":
     polyglot = udi_interface.Interface([])
 
     try:
-        polyglot.start("1.0.0")
+        polyglot.start("1.1.0")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,
