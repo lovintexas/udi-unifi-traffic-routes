@@ -40,10 +40,11 @@ This allows selected clients to be exposed to IoX without creating nodes for eve
 
 For each selected client the plugin provides:
 
-- Online/offline status
-- Blocked status
+- Blocked status as the primary IoX state
+- Online/offline status as a secondary state
 - Block command
 - Unblock command
+- Standard On/Off control, where On = Block and Off = Unblock
 - Query command
 - Periodic status updates
 
@@ -51,8 +52,8 @@ Online status and blocked status are intentionally independent.
 
 A blocked client normally disappears from UniFi's active-station list. It is therefore valid for a client to report:
 
-- Status: Offline
 - Blocked: True
+- Online: False
 
 Unblocking a client permits it to reconnect but does not force the client to immediately associate with the network. Online status remains Offline until UniFi sees the client again.
 
@@ -73,13 +74,14 @@ Port node names include both the port name and switch name where available.
 
 PoE-capable ports provide additional monitoring and control:
 
-- Link status
+- Configured PoE enabled state as the primary IoX state
+- Link status as a secondary state
 - Link speed
-- Configured PoE enabled state
 - Current PoE power
 - PoE On
 - PoE Off
 - PoE Cycle
+- Standard On/Off control for PoE
 
 PoE Enabled represents the configured state of the port.
 
@@ -207,10 +209,12 @@ Provides:
 
 Provides:
 
-- Online/offline Status
-- Blocked status
+- Blocked status (primary state)
+- Online/offline status
 - Block
 - Unblock
+- On = Block
+- Off = Unblock
 - Query
 
 ### Switch Port
@@ -224,13 +228,14 @@ Provides:
 
 Provides:
 
+- PoE Enabled (primary state)
 - Link status
 - Link speed
-- PoE Enabled
 - PoE power
 - PoE On
 - PoE Off
 - PoE Cycle
+- Standard On/Off control
 
 ### Firewall Policy
 
@@ -399,7 +404,7 @@ Commands:
 
 ### PoE Configuration
 
-PoE control updates the switch device using its existing port override configuration while changing the target port's `poe_mode`.
+PoE control updates the switch device's port override configuration, modifying an existing override or creating one when necessary, and sets the target port's `poe_mode`.
 
 ### Firewall Policies
 

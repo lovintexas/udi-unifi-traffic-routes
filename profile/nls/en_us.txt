@@ -20,9 +20,14 @@ CMD-POECYCLE-NAME = PoE Cycle
 
 ND-unififirewall-NAME = UniFi Firewall Policy
 ST-unififirewall-ST-NAME = Enabled
-ST-unificlient-GV1-NAME = Blocked
+ST-unificlient-ST-NAME = Blocked
+ST-unificlient-GV1-NAME = Online
 CMD-BLOCK-NAME = Block
 CMD-UNBLOCK-NAME = Unblock
 
 ND-unifissid-NAME = UniFi SSID
 ST-unifissid-ST-NAME = Enabled
+ST-unifipoeport-ST-NAME = PoE Enabled
+ST-unifipoeport-GV1-NAME = Speed
+ST-unifipoeport-GV2-NAME = Link Up
+ST-unifipoeport-GV3-NAME = Power

@@ -45,6 +45,8 @@
     </sts>
     <cmds>
       <accepts>
+        <cmd id="DON"/>
+        <cmd id="DOF"/>
         <cmd id="BLOCK"/>
         <cmd id="UNBLOCK"/>
         <cmd id="QUERY"/>
@@ -74,13 +76,15 @@
 
   <nodeDef id="unifipoeport" nls="unifipoeport">
     <sts>
-      <st id="ST" editor="bool"/>
+      <st id="ST" editor="poestatus"/>
       <st id="GV1" editor="portspeed"/>
-      <st id="GV2" editor="poestatus"/>
+      <st id="GV2" editor="bool"/>
       <st id="GV3" editor="poepower"/>
     </sts>
     <cmds>
       <accepts>
+        <cmd id="DON"/>
+        <cmd id="DOF"/>
         <cmd id="POEON"/>
         <cmd id="POEOFF"/>
         <cmd id="POECYCLE"/>

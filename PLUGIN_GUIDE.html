@@ -21,9 +21,9 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <section class="card"><h2>Overview</h2><p class="lead">The plugin presents useful UniFi Network objects as native IoX nodes so they can participate in IoX programs, UD Mobile, status displays, and automation.</p>
 <div class="grid"><div class="feature"><strong>Traffic Routes</strong>Monitor and enable/disable discovered UniFi Traffic Routes.</div>
 <div class="feature"><strong>Wi-Fi SSIDs</strong>Monitor and enable/disable configured UniFi Wi-Fi networks from IoX.</div>
-<div class="feature"><strong>Selected Clients</strong>Monitor online state and blocked state for clients placed in the UniFi <code>IoX</code> client group.</div>
+<div class="feature"><strong>Selected Clients</strong>Monitor blocked state as the primary IoX state and online state as a secondary state for clients placed in the UniFi <code>IoX</code> client group.</div>
 <div class="feature"><strong>Switch Ports</strong>Monitor physical link state and negotiated link speed.</div>
-<div class="feature"><strong>PoE Ports</strong>Monitor configured PoE state and power, with PoE On, Off, and Cycle.</div>
+<div class="feature"><strong>PoE Ports</strong>Monitor configured PoE state as the primary IoX state, link state, and power, with standard On/Off control and PoE Cycle.</div>
 <div class="feature"><strong>Firewall Policies</strong>Monitor and enable/disable user-created policies while excluding predefined UniFi policies.</div></div></section>
 
 <section class="card"><h2>Configuration</h2><table><tr><th>Parameter</th><th>Purpose</th></tr>
@@ -48,15 +48,15 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <tr><td><strong>Controller</strong></td><td>Connection/operational status</td><td>Query</td></tr>
 <tr><td><strong>Traffic Route</strong></td><td>Enabled state</td><td>Enable, Disable, Query</td></tr>
 <tr><td><strong>UniFi SSID</strong></td><td>Enabled state</td><td>Enable, Disable, Query</td></tr>
-<tr><td><strong>UniFi Client</strong></td><td>Status (online/offline), Blocked (true/false)</td><td>Block, Unblock, Query</td></tr>
+<tr><td><strong>UniFi Client</strong></td><td>Blocked (primary), Online (secondary)</td><td>On/Block, Off/Unblock, Query</td></tr>
 <tr><td><strong>Switch Port</strong></td><td>Link state, link speed</td><td>Monitoring</td></tr>
-<tr><td><strong>PoE Switch Port</strong></td><td>Link state, link speed, PoE Enabled, PoE power</td><td>PoE On, PoE Off, PoE Cycle</td></tr>
+<tr><td><strong>PoE Switch Port</strong></td><td>PoE Enabled (primary), link state, link speed, PoE power</td><td>On/PoE On, Off/PoE Off, PoE Cycle</td></tr>
 <tr><td><strong>Firewall Policy</strong></td><td>Enabled state</td><td>Enable, Disable, Query</td></tr></table></section>
 
 <section class="card"><h2>How Status Is Determined</h2>
 <h3>Wi-Fi SSIDs</h3><p><strong>Enabled status</strong> reflects the current UniFi WLAN configuration. Enable and Disable commands change only the SSID's <code>enabled</code> state while preserving the existing WLAN configuration.</p>
 <h3>Clients</h3><p><strong>Online status</strong> comes from UniFi's active-station data. A client absent from that list is reported offline.</p>
-<p><strong>Blocked status</strong> is tracked independently using UniFi's current blocked-client history. A blocked client normally disappears from the active-station list, so a node can correctly show <em>Status: False</em> and <em>Blocked: True</em>.</p>
+<p><strong>Blocked status</strong> is tracked independently using UniFi's current blocked-client history. A blocked client normally disappears from the active-station list, so a node can correctly show <em>Blocked: True</em> and <em>Online: False</em>.</p>
 <div class="callout ok">Block and Unblock commands are followed by delayed readback of UniFi's actual blocked-client state rather than an assumed optimistic change.</div>
 <h3>PoE</h3><p><strong>PoE Enabled</strong> represents configured state. A port configured for PoE may not be actively delivering power when no powered device is present. PoE commands use delayed switch readback; PoE Cycle turns power off, verifies it, waits, restores automatic PoE, and verifies again.</p>
 <h3>Firewall policies</h3><p>Only policies for which UniFi reports <code>predefined = false</code> are exposed. The plugin changes only the enabled state; it does not edit matching, action, networks, ports, or other policy content.</p></section>
@@ -84,7 +84,7 @@ footer{padding:0 22px 35px;color:var(--muted);font-size:13px}@media(max-width:65
 <tr><td>Blocked clients</td><td><code>/proxy/network/v2/api/site/default/clients/history?onlyBlocked=true&amp;withinHours=0</code></td></tr>
 <tr><td>Block / Unblock</td><td><code>POST /proxy/network/api/s/default/cmd/stamgr</code> using <code>block-sta</code> / <code>unblock-sta</code></td></tr>
 <tr><td>Switch/port status</td><td><code>/proxy/network/api/s/default/stat/device</code></td></tr>
-<tr><td>PoE</td><td>Switch device update using the current port override array with target <code>poe_mode</code> changed</td></tr>
+<tr><td>PoE</td><td>Switch device update that modifies an existing port override or creates one when necessary, with the target <code>poe_mode</code> changed</td></tr>
 <tr><td>Firewall policies</td><td><code>/proxy/network/v2/api/site/default/firewall-policies</code>; enable/disable via <code>/firewall-policies/batch</code></td></tr></table></section>
 
 <section class="card"><h2>Security Notes</h2><ul>

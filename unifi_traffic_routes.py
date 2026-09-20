@@ -256,11 +256,13 @@ class UniFiClient:
         )
 
         if not target:
-            raise RuntimeError(
-                f"Port {port_idx} override not found"
-            )
-
-        target["poe_mode"] = poe_mode
+            target = {
+                "port_idx": port_idx,
+                "poe_mode": poe_mode
+            }
+            overrides.append(target)
+        else:
+            target["poe_mode"] = poe_mode
 
         url = (
             f"https://{self.host}"
@@ -610,10 +612,10 @@ class UniFiClientNode(udi_interface.Node):
         self.client = client
 
     def update_status(self, online):
-        self.setDriver("ST", 1 if online else 0)
+        self.setDriver("GV1", 1 if online else 0)
 
     def update_blocked(self, blocked):
-        self.setDriver("GV1", 1 if blocked else 0)
+        self.setDriver("ST", 1 if blocked else 0)
 
     def _refresh_blocked(self, delay=3):
         try:
@@ -674,6 +676,8 @@ class UniFiClientNode(udi_interface.Node):
         self._refresh_blocked(delay=0)
 
     commands = {
+        "DON": cmd_block,
+        "DOF": cmd_unblock,
         "BLOCK": cmd_block,
         "UNBLOCK": cmd_unblock,
         "QUERY": cmd_query
@@ -838,7 +842,7 @@ class UniFiPoePortNode(udi_interface.Node):
         self.port_idx = port_idx
 
     def update_status(self, port):
-        self.setDriver("ST", 1 if port.get("up") else 0)
+        self.setDriver("GV2", 1 if port.get("up") else 0)
         self.setDriver("GV1", port.get("speed") or 0)
         poe_mode = port.get("poe_mode")
 
@@ -847,7 +851,7 @@ class UniFiPoePortNode(udi_interface.Node):
         else:
             poe_status = 0
 
-        self.setDriver("GV2", poe_status)
+        self.setDriver("ST", poe_status)
 
         try:
             power = float(port.get("poe_power") or 0)
@@ -968,6 +972,8 @@ class UniFiPoePortNode(udi_interface.Node):
         ).start()
 
     commands = {
+        "DON": cmd_poe_on,
+        "DOF": cmd_poe_off,
         "POEON": cmd_poe_on,
         "POEOFF": cmd_poe_off,
         "POECYCLE": cmd_poe_cycle
@@ -1455,7 +1461,7 @@ if __name__ == "__main__":
     polyglot = udi_interface.Interface([])
 
     try:
-        polyglot.start("1.1.0")
+        polyglot.start("1.1.1")
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,
