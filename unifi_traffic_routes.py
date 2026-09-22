@@ -453,7 +453,7 @@ class TrafficRouteNode(udi_interface.Node):
     def __init__(self, polyglot, primary, address, name,
                  client, route_id):
 
-        super().__init__(polyglot, primary, address, name)
+        super().__init__(polyglot, address, address, name)
 
         self.client = client
         self.route_id = route_id
@@ -513,7 +513,7 @@ class UniFiSSIDNode(udi_interface.Node):
         client,
         wlan_id
     ):
-        super().__init__(polyglot, primary, address, name)
+        super().__init__(polyglot, address, address, name)
 
         self.client = client
         self.wlan_id = wlan_id
@@ -606,7 +606,7 @@ class UniFiClientNode(udi_interface.Node):
         mac,
         client
     ):
-        super().__init__(polyglot, primary, address, name)
+        super().__init__(polyglot, address, address, name)
 
         self.mac = mac.lower()
         self.client = client
@@ -701,7 +701,7 @@ class UniFiFirewallPolicyNode(udi_interface.Node):
         client,
         policy_id
     ):
-        super().__init__(polyglot, primary, address, name)
+        super().__init__(polyglot, address, address, name)
 
         self.client = client
         self.policy_id = policy_id
@@ -780,6 +780,35 @@ class UniFiFirewallPolicyNode(udi_interface.Node):
         "DOF": cmd_off,
         "QUERY": cmd_query
     }
+
+
+class UniFiSwitchNode(udi_interface.Node):
+
+    id = "unifiswitch"
+
+    drivers = [
+        {"driver": "ST", "value": 0, "uom": 2},
+    ]
+
+    def __init__(
+        self,
+        polyglot,
+        primary,
+        address,
+        name,
+        switch_id,
+        switch_mac
+    ):
+        super().__init__(polyglot, address, address, name)
+
+        self.switch_id = switch_id
+        self.switch_mac = switch_mac.lower()
+
+    def update_status(self, switch):
+        self.setDriver(
+            "ST",
+            1 if switch.get("state") == 1 else 0
+        )
 
 
 class UniFiPortNode(udi_interface.Node):
@@ -993,7 +1022,7 @@ class Controller(udi_interface.Node):
             polyglot,
             "controller",
             "controller",
-            "UniFi Traffic Routes"
+            "UniFi Control"
         )
 
         self.poly = polyglot
@@ -1001,9 +1030,43 @@ class Controller(udi_interface.Node):
         self.route_nodes = {}
         self.client_nodes = {}
         self.client_group_name = "IoX"
+        self.switch_nodes = {}
         self.port_nodes = {}
         self.firewall_nodes = {}
         self.ssid_nodes = {}
+        self.n_queue = []
+
+    def node_queue(self, data):
+        LOGGER.debug("ADDNODEDONE data: %r", data)
+        address = data.get("address")
+        if address:
+            self.n_queue.append(data)
+
+    def wait_for_node_done(self, address, timeout=30):
+        deadline = time.time() + timeout
+
+        while time.time() < deadline:
+            for data in list(self.n_queue):
+                if data.get("address") == address:
+                    self.n_queue.remove(data)
+
+                    if data.get("error"):
+                        LOGGER.error(
+                            "Failed to add node %s: %s",
+                            address,
+                            data.get("error")
+                        )
+                        return False
+
+                    return True
+
+            time.sleep(0.1)
+
+        LOGGER.error(
+            "Timed out waiting for ADDNODEDONE for %s",
+            address
+        )
+        return False
 
     def configure(self, params):
         host = params.get("host")
@@ -1251,6 +1314,34 @@ class Controller(udi_interface.Node):
             if not switch_id or not switch_mac:
                 continue
 
+            # Create one IoX node for the physical switch. Ports use this
+            # switch node as their primary node.
+            switch_address = (
+                "us"
+                + switch_mac.replace(":", "")[-12:]
+            )
+
+            if switch_address not in self.switch_nodes:
+                node = UniFiSwitchNode(
+                    self.poly,
+                    self.address,
+                    switch_address,
+                    switch_name,
+                    switch_id,
+                    switch_mac
+                )
+
+                self.poly.addNode(node)
+                if not self.wait_for_node_done(switch_address):
+                    LOGGER.error(
+                        "Skipping ports for switch %s because the switch node was not added",
+                        switch_address
+                    )
+                    continue
+                self.switch_nodes[switch_address] = node
+
+            self.switch_nodes[switch_address].update_status(switch)
+
             for port in switch.get("port_table", []):
                 port_idx = port.get("port_idx")
 
@@ -1275,7 +1366,7 @@ class Controller(udi_interface.Node):
                     if port.get("port_poe"):
                         node = UniFiPoePortNode(
                             self.poly,
-                            self.address,
+                            switch_address,
                             address,
                             name,
                             self.client,
@@ -1286,7 +1377,7 @@ class Controller(udi_interface.Node):
                     else:
                         node = UniFiPortNode(
                             self.poly,
-                            self.address,
+                            switch_address,
                             address,
                             name,
                             switch_id,
@@ -1295,6 +1386,12 @@ class Controller(udi_interface.Node):
                         )
 
                     self.poly.addNode(node)
+                    if not self.wait_for_node_done(address):
+                        LOGGER.error(
+                            "Port node %s was not added; it will be retried on next discovery",
+                            address
+                        )
+                        continue
                     self.port_nodes[address] = node
 
                 self.port_nodes[address].update_status(port)
@@ -1437,6 +1534,11 @@ class Controller(udi_interface.Node):
 controller = None
 
 
+def controller_node_queue(data):
+    if controller is not None:
+        controller.node_queue(data)
+
+
 def custom_params_handler(params):
     global controller
 
@@ -1462,6 +1564,11 @@ if __name__ == "__main__":
 
     try:
         polyglot.start("1.1.1")
+
+        polyglot.subscribe(
+            polyglot.ADDNODEDONE,
+            controller_node_queue
+        )
 
         polyglot.subscribe(
             polyglot.CUSTOMPARAMS,
