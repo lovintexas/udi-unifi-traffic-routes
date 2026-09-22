@@ -9,6 +9,7 @@ CMD-QUERY-NAME = Query
 
 ND-unificlient-NAME = UniFi Client
 
+ND-unifiswitch-NAME = UniFi Switch
 ND-unifiport-NAME = UniFi Switch Port
 ND-unifipoeport-NAME = UniFi PoE Switch Port
 ST-GV1-NAME = Link Speed

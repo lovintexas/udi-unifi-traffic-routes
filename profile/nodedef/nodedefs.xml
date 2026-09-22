@@ -67,6 +67,12 @@
     </cmds>
   </nodeDef>
 
+  <nodeDef id="unifiswitch" nls="unifiswitch">
+    <sts>
+      <st id="ST" editor="bool"/>
+    </sts>
+  </nodeDef>
+
   <nodeDef id="unifiport" nls="unifiport">
     <sts>
       <st id="ST" editor="bool"/>
