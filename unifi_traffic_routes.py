@@ -799,6 +799,10 @@ class UniFiSwitchNode(udi_interface.Node):
         switch_id,
         switch_mac
     ):
+        # Physical switch nodes are their own primary. This is intentional:
+        # the switch is a real IoX node that acts as the parent for its ports.
+        # Other top-level UniFi nodes likewise use their own address as primary
+        # so they appear directly beneath the main UniFi Control node.
         super().__init__(polyglot, address, address, name)
 
         self.switch_id = switch_id
@@ -1036,6 +1040,10 @@ class Controller(udi_interface.Node):
         self.ssid_nodes = {}
         self.n_queue = []
 
+    # poly.addNode() is asynchronous. IoX sends ADDNODEDONE when the node
+    # has actually been created (or when creation fails). We retain the
+    # complete response because an address alone cannot distinguish success
+    # from an error such as HTTP 400.
     def node_queue(self, data):
         LOGGER.debug("ADDNODEDONE data: %r", data)
         address = data.get("address")
@@ -1314,8 +1322,9 @@ class Controller(udi_interface.Node):
             if not switch_id or not switch_mac:
                 continue
 
-            # Create one IoX node for the physical switch. Ports use this
-            # switch node as their primary node.
+            # Create one IoX node for the physical switch. The switch is
+            # self-primary and therefore appears directly under UniFi Control.
+            # Ports use this switch node as their primary node.
             switch_address = (
                 "us"
                 + switch_mac.replace(":", "")[-12:]
@@ -1331,6 +1340,10 @@ class Controller(udi_interface.Node):
                     switch_mac
                 )
 
+                # Do not create the child ports until IoX confirms that the
+                # switch node exists. Creating parent and children immediately
+                # can race IoX's asynchronous node creation and produce HTTP
+                # 400 errors for otherwise valid port nodes.
                 self.poly.addNode(node)
                 if not self.wait_for_node_done(switch_address):
                     LOGGER.error(
@@ -1385,6 +1398,9 @@ class Controller(udi_interface.Node):
                             port_idx
                         )
 
+                    # Only remember the port after IoX confirms creation.
+                    # Failed additions are deliberately left out so discovery
+                    # can retry them on a later pass.
                     self.poly.addNode(node)
                     if not self.wait_for_node_done(address):
                         LOGGER.error(
