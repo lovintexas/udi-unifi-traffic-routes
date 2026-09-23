@@ -438,6 +438,8 @@ A formatted HTML version of the plugin documentation is included in the reposito
 
 [PLUGIN_GUIDE.html](PLUGIN_GUIDE.html)
 
+Live documentation: https://lovintexas.github.io/udi-unifi-traffic-routes/PLUGIN_GUIDE.html
+
 ## License and Notice
 
 See `NOTICE` for applicable notices.
