@@ -1579,7 +1579,7 @@ if __name__ == "__main__":
     polyglot = udi_interface.Interface([])
 
     try:
-        polyglot.start("1.1.1")
+        polyglot.start("1.1.2")
 
         polyglot.subscribe(
             polyglot.ADDNODEDONE,
