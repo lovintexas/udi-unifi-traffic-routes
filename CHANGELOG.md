@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.4
+
+- Updated all eight UniFi node types to use GenericCtl icons instead of the default light-bulb icons.
+- Improved visual consistency in the IoX Admin Console.
+- No changes to UniFi monitoring or control functionality.
+
 ## 1.1.3
 
 - Removed duplicate PoE On and PoE Off commands from PoE switch-port nodes.
