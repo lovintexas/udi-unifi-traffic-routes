@@ -30,3 +30,12 @@ ST-unifipoeport-ST-NAME = PoE Enabled
 ST-unifipoeport-GV1-NAME = Speed
 ST-unifipoeport-GV2-NAME = Link Up
 ST-unifipoeport-GV3-NAME = Power
+
+ND-controller-ICON = GenericCtl
+ND-unifiroute-ICON = GenericCtl
+ND-unifissid-ICON = GenericCtl
+ND-unificlient-ICON = GenericCtl
+ND-unififirewall-ICON = GenericCtl
+ND-unifiswitch-ICON = GenericCtl
+ND-unifiport-ICON = GenericCtl
+ND-unifipoeport-ICON = GenericCtl
